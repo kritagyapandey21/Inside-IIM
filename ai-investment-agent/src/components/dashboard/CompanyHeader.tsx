@@ -191,19 +191,19 @@ export default function CompanyHeader({
     <div className="no-print border-b border-border bg-background/80 px-6 pl-14 backdrop-blur-sm lg:pl-6">
       {/* Title row */}
       <div className="flex items-center justify-between gap-4 pt-4">
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <CompanyLogo website={profile?.website} seed={ticker || name} size={40} />
           <div className="flex min-w-0 flex-col gap-0.5">
             <div className="flex min-w-0 items-center gap-2">
-              <h1 className="truncate text-xl font-semibold tracking-tight">{name}</h1>
+              <h1 className="min-w-0 flex-1 truncate text-xl font-semibold tracking-tight sm:flex-initial">{name}</h1>
               {ticker && (
-                <span className="mono shrink-0 text-sm font-medium text-muted-foreground">
+                <span className="mono hidden shrink-0 text-sm font-medium text-muted-foreground sm:inline">
                   {ticker}
                 </span>
               )}
               {verdict && (
                 <span
-                  className="shrink-0 rounded-md px-2 py-0.5 text-[11px] font-bold"
+                  className="hidden shrink-0 rounded-md px-2 py-0.5 text-[11px] font-bold sm:inline-block"
                   style={{ color: VERDICT_COLOR[verdict], background: "var(--background-secondary)" }}
                 >
                   {verdict}
@@ -211,6 +211,19 @@ export default function CompanyHeader({
               )}
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
+              {ticker && (
+                <span className="mono shrink-0 text-xs font-medium text-muted-foreground sm:hidden">
+                  {ticker}
+                </span>
+              )}
+              {verdict && (
+                <span
+                  className="shrink-0 rounded-md px-2 py-0.5 text-[11px] font-bold sm:hidden"
+                  style={{ color: VERDICT_COLOR[verdict], background: "var(--background-secondary)" }}
+                >
+                  {verdict}
+                </span>
+              )}
               {profile?.exchange && <Badge variant="outline">{profile.exchange}</Badge>}
               {profile?.sector && <Badge variant="outline">{profile.sector}</Badge>}
               {market?.fetchedAt && (
@@ -235,19 +248,25 @@ export default function CompanyHeader({
           </SimpleTooltip>
           {ticker && (
             <SimpleTooltip label={pinned ? "Remove from watchlist" : "Add to watchlist"}>
-              <Button variant="ghost" size="icon-sm" onClick={onTogglePin}>
+              <Button variant="ghost" size="icon-sm" onClick={onTogglePin} className="hidden sm:inline-flex">
                 <Star className={cn("h-4 w-4", pinned && "fill-warning text-warning")} />
               </Button>
             </SimpleTooltip>
           )}
           <SimpleTooltip label="Refresh market data">
-            <Button variant="ghost" size="icon-sm" onClick={() => refreshMarket()} disabled={marketLoading}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => refreshMarket()}
+              disabled={marketLoading}
+              className="hidden sm:inline-flex"
+            >
               <RefreshCw className={cn("h-4 w-4", marketLoading && "animate-spin")} />
             </Button>
           </SimpleTooltip>
-          <Button variant="outline" size="sm" onClick={share}>
+          <Button variant="outline" size="sm" onClick={share} className="hidden sm:inline-flex">
             {copied ? <Check className="h-3.5 w-3.5 text-positive" /> : <Share2 className="h-3.5 w-3.5" />}
-            <span className="hidden sm:inline">{copied ? "Copied" : "Share"}</span>
+            <span className="hidden lg:inline">{copied ? "Copied" : "Share"}</span>
           </Button>
           <Button variant="outline" size="sm" onClick={onAddWidget} className="hidden md:inline-flex">
             <Plus className="h-3.5 w-3.5" /> Add Widget
@@ -256,9 +275,10 @@ export default function CompanyHeader({
             variant={store.editMode ? "default" : "outline"}
             size="sm"
             onClick={() => store.setEditMode(!store.editMode)}
+            className="hidden sm:inline-flex"
           >
             {store.editMode ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
-            <span className="hidden sm:inline">{store.editMode ? "Done" : "Customize"}</span>
+            <span className="hidden lg:inline">{store.editMode ? "Done" : "Customize"}</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -267,6 +287,23 @@ export default function CompanyHeader({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
+              {ticker && (
+                <DropdownMenuItem onClick={onTogglePin} className="sm:hidden">
+                  <Star className={cn(pinned && "fill-warning text-warning")} />
+                  {pinned ? "Remove from watchlist" : "Add to watchlist"}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={() => refreshMarket()} className="sm:hidden">
+                <RefreshCw /> Refresh market data
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={share} className="sm:hidden">
+                <Share2 /> {copied ? "Copied" : "Share"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => store.setEditMode(!store.editMode)} className="sm:hidden">
+                {store.editMode ? <Check /> : <Pencil />}
+                {store.editMode ? "Done customizing" : "Customize"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="sm:hidden" />
               <DropdownMenuItem onClick={onAddWidget} className="md:hidden">
                 <Plus /> Add widget
               </DropdownMenuItem>

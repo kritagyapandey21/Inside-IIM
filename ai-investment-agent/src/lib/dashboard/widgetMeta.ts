@@ -29,7 +29,7 @@ export const WIDGET_META: Record<WidgetType, WidgetMeta> = {
   "news-sentiment": { type: "news-sentiment", title: "News Sentiment", description: "Market sentiment from recent news.", source: "ai", w: 4, h: 6, minW: 3, minH: 4, tabs: ["overview", "news"] },
   comparables: { type: "comparables", title: "Comparable Companies", description: "Peer companies and valuation.", source: "market", w: 5, h: 6, minW: 4, minH: 4, tabs: ["overview", "peers"] },
   dividends: { type: "dividends", title: "Dividend History", description: "Historical dividend payments.", source: "market", w: 4, h: 5, minW: 3, minH: 4, tabs: ["overview", "financials"] },
-  notes: { type: "notes", title: "Notes", description: "Your private notes on this company.", source: "local", w: 4, h: 5, minW: 3, minH: 3, tabs: ["overview", "notes"] },
+  notes: { type: "notes", title: "Notes", description: "Your private notes on this company.", source: "local", w: 4, h: 8, minW: 3, minH: 3, tabs: ["overview", "notes"] },
   "ai-chat": { type: "ai-chat", title: "AI Chat", description: "Ask follow-up questions about this company.", source: "local", w: 4, h: 8, minW: 3, minH: 5, tabs: ["overview", "notes"] },
 };
 
@@ -62,9 +62,10 @@ export function buildDefaultDashboard(): { widgets: WidgetInstance[] } {
     ["valuation", 4, 6],
     ["analyst-consensus", 4, 6],
     ["comparables", 5, 6],
+    ["institutional-ownership", 4, 6],
     ["financial-health", 4, 6],
     ["stock-performance", 4, 6],
-    ["notes", 4, 6],
+    ["notes", 4, 8],
     ["ai-chat", 4, 8],
   ];
 

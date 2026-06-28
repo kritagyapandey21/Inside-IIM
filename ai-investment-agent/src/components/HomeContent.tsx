@@ -23,6 +23,7 @@ import {
   FileText,
   Settings,
   Menu,
+  X,
 } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import CompanyLogo from "@/components/CompanyLogo";
@@ -92,6 +93,15 @@ function DashboardShell() {
   const [addWidgetOpen, setAddWidgetOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [loadingToastDismissed, setLoadingToastDismissed] = useState(false);
+
+  // Re-arm the loading toast for the next analysis once the current one
+  // finishes — otherwise a dismissed toast would stay hidden forever. Done
+  // eagerly during render rather than in an effect (React's documented
+  // pattern for resetting derived state without an extra render pass).
+  if (!marketLoading && !researchLoading && loadingToastDismissed) {
+    setLoadingToastDismissed(false);
+  }
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -339,10 +349,17 @@ function DashboardShell() {
         </DialogContent>
       </Dialog>
 
-      {(marketLoading || researchLoading) && (
-        <div className="fixed bottom-6 right-6 flex items-center gap-3 rounded-full border border-border bg-popover px-4 py-2 text-sm font-medium shadow-lg fade-in-up">
+      {(marketLoading || researchLoading) && !loadingToastDismissed && (
+        <div className="fixed bottom-6 right-6 flex items-center gap-3 rounded-full border border-border bg-popover px-4 py-2 pr-2 text-sm font-medium shadow-lg fade-in-up">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           {marketLoading ? "Fetching market data..." : "AI is analyzing..."}
+          <button
+            onClick={() => setLoadingToastDismissed(true)}
+            aria-label="Dismiss"
+            className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
     </div>
