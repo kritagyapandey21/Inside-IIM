@@ -20,8 +20,12 @@ import { cn } from "@/lib/utils";
 import type { Recommendation } from "@/lib/types";
 
 /** After this long with no result, stop spinning silently and offer a retry
- *  instead — an indefinite spinner is indistinguishable from "broken". */
-const SLOW_THRESHOLD_MS = 30000;
+ *  instead — an indefinite spinner is indistinguishable from "broken". Set
+ *  well above the agent's normal runtime (observed 90-150s for a full
+ *  analysis: 3 parallel gather nodes, then analyze, then recommend, each an
+ *  NVIDIA NIM call that may itself retry on rate limits) so this only fires
+ *  for genuinely stuck requests, not normal operation. */
+const SLOW_THRESHOLD_MS = 150000;
 
 /**
  * The research API falls back to this exact empty shape when the LLM's
@@ -65,7 +69,7 @@ function AiGate({
   if (researchLoading && slow) {
     return (
       <WidgetError
-        message="This is taking longer than usual — the AI service may be busy."
+        message="Still working — a full analysis can take a couple of minutes. Retrying restarts it from scratch, so only do that if it seems genuinely stuck."
         onRetry={retry}
       />
     );
