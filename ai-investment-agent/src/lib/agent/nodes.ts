@@ -101,7 +101,7 @@ function extractRetryAfterMs(err: any): number | undefined {
 export async function gatherInfoNode(
   state: ResearchStateType
 ): Promise<Partial<ResearchStateType>> {
-  console.log(`[Agent] 🔍 Gathering company information for: ${state.companyName}`);
+  console.log(`[Agent] Gathering company information for: ${state.companyName}`);
 
   try {
     const searchTool = createSearchTool();
@@ -147,7 +147,7 @@ export async function gatherInfoNode(
 export async function gatherFinancialsNode(
   state: ResearchStateType
 ): Promise<Partial<ResearchStateType>> {
-  console.log(`[Agent] 📊 Gathering financial data for: ${state.companyName}`);
+  console.log(`[Agent] Gathering financial data for: ${state.companyName}`);
 
   try {
     // Step 1: Resolve the ticker via Yahoo's search endpoint (deterministic and
@@ -210,7 +210,7 @@ export async function gatherFinancialsNode(
 export async function gatherNewsNode(
   state: ResearchStateType
 ): Promise<Partial<ResearchStateType>> {
-  console.log(`[Agent] 📰 Gathering news & sentiment for: ${state.companyName}`);
+  console.log(`[Agent] Gathering news & sentiment for: ${state.companyName}`);
 
   try {
     const searchTool = createSearchTool();
@@ -263,7 +263,7 @@ export async function gatherNewsNode(
 export async function analyzeNode(
   state: ResearchStateType
 ): Promise<Partial<ResearchStateType>> {
-  console.log(`[Agent] 🧠 Analyzing all data for: ${state.companyName}`);
+  console.log(`[Agent] Analyzing all data for: ${state.companyName}`);
 
   try {
     const analysis = await invokeWithRetry(
@@ -336,7 +336,7 @@ export async function analyzeNode(
 export async function recommendNode(
   state: ResearchStateType
 ): Promise<Partial<ResearchStateType>> {
-  console.log(`[Agent] ✅ Generating recommendation for: ${state.companyName}`);
+  console.log(`[Agent] Generating recommendation for: ${state.companyName}`);
 
   try {
     const content = await invokeWithRetry(
