@@ -21,6 +21,7 @@ import type {
   CalendarEvent,
   Comparable,
 } from "../types";
+import { KNOWN_COMPANIES } from "./knownCompanies";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -28,6 +29,45 @@ async function client() {
   const mod = await import("yahoo-finance2");
   const YahooFinance = mod.default as any;
   return new YahooFinance({ suppressNotices: ["yahooSurvey"] });
+}
+
+/** Classic Levenshtein edit distance — small inputs only (ticker/name search). */
+function editDistance(a: string, b: string): number {
+  const dp: number[][] = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      dp[i][j] =
+        a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1]
+          : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[a.length][b.length];
+}
+
+/**
+ * Typo-tolerant fallback against a curated list of well-known tickers — used
+ * only when Yahoo's own (prefix/token) search comes back empty, e.g.
+ * "relience" doesn't prefix-match "Reliance Industries" on Yahoo's index but
+ * is within edit-distance 2 of it.
+ */
+function fuzzyMatchKnownCompanies(query: string): { symbol: string; name: string }[] {
+  const q = query.toLowerCase();
+  const scored = KNOWN_COMPANIES.map((c) => {
+    const name = c.name.toLowerCase();
+    // Compare against the first word of the name too (e.g. "apple" vs "apple inc.")
+    const firstWord = name.split(/[\s,.]/)[0];
+    const dist = Math.min(editDistance(q, name), editDistance(q, firstWord));
+    return { ...c, dist };
+  });
+  const maxDist = q.length <= 4 ? 1 : 2;
+  return scored
+    .filter((c) => c.dist <= maxDist)
+    .sort((a, b) => a.dist - b.dist)
+    .slice(0, 5)
+    .map(({ symbol, name }) => ({ symbol, name }));
 }
 
 const num = (v: unknown): number | undefined =>
@@ -62,6 +102,44 @@ export async function resolveTicker(query: string): Promise<string | null> {
     /* fall through to the symbol-shaped fallback below */
   }
   return looksTickery ? q.toUpperCase() : null;
+}
+
+export interface CompanySearchResult {
+  symbol: string;
+  name: string;
+  exchange?: string;
+  type?: string;
+}
+
+/**
+ * Live autocomplete suggestions for the search/command palette as the user
+ * types — same Yahoo search index as resolveTicker, but returns the full
+ * candidate list (not just the best match) so the UI can render a dropdown.
+ */
+export async function searchCompanies(query: string): Promise<CompanySearchResult[]> {
+  const q = query.trim();
+  if (!q || q.length < 1) return [];
+  try {
+    const yf = await client();
+    const res: any = await yf.search(q, { quotesCount: 8, newsCount: 0 });
+    const quotes: any[] = (res.quotes ?? []).filter(
+      (x: any) => x.symbol && (x.quoteType === "EQUITY" || x.quoteType === "ETF")
+    );
+    if (quotes.length > 0) {
+      return quotes.map((x) => ({
+        symbol: x.symbol,
+        name: x.shortname || x.longname || x.symbol,
+        exchange: x.exchange,
+        type: x.quoteType,
+      }));
+    }
+  } catch {
+    /* fall through to the fuzzy fallback below */
+  }
+  // Yahoo's search is prefix/token-based and won't catch a genuine typo
+  // (e.g. "relience" vs "Reliance") — try a small edit-distance match
+  // against well-known tickers before giving up.
+  return fuzzyMatchKnownCompanies(q);
 }
 
 async function getQuoteAndStats(

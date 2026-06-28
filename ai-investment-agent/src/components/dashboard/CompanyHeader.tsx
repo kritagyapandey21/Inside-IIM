@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Plus,
   Share2,
@@ -120,6 +120,32 @@ export default function CompanyHeader({
     return () => clearInterval(id);
   }, []);
 
+  // Auto-refresh the live quote every 15s so the terminal feels alive without
+  // a manual click — pauses while a refresh is already in flight.
+  useEffect(() => {
+    if (!ticker) return;
+    const id = setInterval(() => {
+      if (!marketLoading) void refreshMarket();
+    }, 15000);
+    return () => clearInterval(id);
+  }, [ticker, marketLoading, refreshMarket]);
+
+  // Flash the price green/red for a beat whenever it actually changes, so a
+  // refreshed quote reads as "live" instead of a silent number swap.
+  const [flash, setFlash] = useState<"up" | "down" | null>(null);
+  const prevPrice = useRef<number | null>(null);
+  useEffect(() => {
+    const price = metrics?.regularMarketPrice;
+    if (price == null) return;
+    if (prevPrice.current != null && price !== prevPrice.current) {
+      setFlash(price > prevPrice.current ? "up" : "down");
+      const t = setTimeout(() => setFlash(null), 700);
+      prevPrice.current = price;
+      return () => clearTimeout(t);
+    }
+    prevPrice.current = price;
+  }, [metrics?.regularMarketPrice]);
+
   const change = metrics?.regularMarketChange;
   const changePct = metrics?.regularMarketChangePercent;
   const up = (changePct ?? 0) >= 0;
@@ -184,19 +210,24 @@ export default function CompanyHeader({
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               {profile?.exchange && <Badge variant="outline">{profile.exchange}</Badge>}
               {profile?.sector && <Badge variant="outline">{profile.sector}</Badge>}
               {market?.fetchedAt && (
-                <span className="text-[11px] text-muted-foreground">
-                  Updated {relativeTime(market.fetchedAt, now)}
+                <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[11px] text-muted-foreground">
+                  <span className="relative flex h-1.5 w-1.5 shrink-0">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-positive opacity-60" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-positive" />
+                  </span>
+                  <span className="hidden sm:inline">Live · updated {relativeTime(market.fetchedAt, now)}</span>
+                  <span className="sm:hidden">Live</span>
                 </span>
               )}
             </div>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <SimpleTooltip label="Search (⌘K)">
             <Button variant="ghost" size="icon-sm" onClick={onOpenSearch}>
               <Search className="h-4 w-4" />
@@ -216,9 +247,9 @@ export default function CompanyHeader({
           </SimpleTooltip>
           <Button variant="outline" size="sm" onClick={share}>
             {copied ? <Check className="h-3.5 w-3.5 text-positive" /> : <Share2 className="h-3.5 w-3.5" />}
-            {copied ? "Copied" : "Share"}
+            <span className="hidden sm:inline">{copied ? "Copied" : "Share"}</span>
           </Button>
-          <Button variant="outline" size="sm" onClick={onAddWidget}>
+          <Button variant="outline" size="sm" onClick={onAddWidget} className="hidden md:inline-flex">
             <Plus className="h-3.5 w-3.5" /> Add Widget
           </Button>
           <Button
@@ -227,7 +258,7 @@ export default function CompanyHeader({
             onClick={() => store.setEditMode(!store.editMode)}
           >
             {store.editMode ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
-            {store.editMode ? "Done" : "Customize"}
+            <span className="hidden sm:inline">{store.editMode ? "Done" : "Customize"}</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -236,6 +267,9 @@ export default function CompanyHeader({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem onClick={onAddWidget} className="md:hidden">
+                <Plus /> Add widget
+              </DropdownMenuItem>
               <DropdownMenuLabel>Layout</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => store.saveCurrentAs(`Layout ${store.saved.length + 1}`)}>
                 <Save /> Save current layout
@@ -270,7 +304,15 @@ export default function CompanyHeader({
       {metrics?.regularMarketPrice != null && (
         <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-border bg-background-secondary px-4 py-2.5">
           <div className="flex items-baseline gap-2">
-            <span className="mono text-2xl font-bold leading-none">{fmtMoney(metrics.regularMarketPrice, metrics.currency)}</span>
+            <span
+              className={cn(
+                "mono text-2xl font-bold leading-none transition-colors duration-300 rounded px-1 -mx-1",
+                flash === "up" && "bg-positive/20 text-positive",
+                flash === "down" && "bg-negative/20 text-negative"
+              )}
+            >
+              {fmtMoney(metrics.regularMarketPrice, metrics.currency)}
+            </span>
             <span className="mono text-sm font-semibold" style={{ color: changeColor }}>
               {up ? "+" : ""}
               {fmtNum(change)} ({up ? "+" : ""}

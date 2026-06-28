@@ -203,7 +203,9 @@ export default function WidgetShell({
               <span className="text-xs text-muted-foreground">{subtitle}</span>
             )}
           </div>
-          <div className="min-h-[420px] flex-1 overflow-auto p-5">{children}</div>
+          <div className="relative h-[420px] shrink-0 overflow-auto p-5">
+            <div className="h-full">{children}</div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

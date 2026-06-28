@@ -8,7 +8,7 @@ import type { WidgetMeta, WidgetType, WidgetInstance } from "./types";
 export const WIDGET_META: Record<WidgetType, WidgetMeta> = {
   "ai-recommendation": { type: "ai-recommendation", title: "AI Recommendation", description: "INVEST / WATCH / PASS verdict with conviction score.", source: "ai", w: 4, h: 6, minW: 3, minH: 5, tabs: ["overview"] },
   "executive-summary": { type: "executive-summary", title: "Executive Summary", description: "AI thesis summary of the company.", source: "ai", w: 4, h: 6, minW: 3, minH: 4, tabs: ["overview"] },
-  "price-chart": { type: "price-chart", title: "Price Overview", description: "Intraday → 5Y price with range selector.", source: "market", w: 5, h: 6, minW: 4, minH: 5, tabs: ["overview", "financials", "valuation"] },
+  "price-chart": { type: "price-chart", title: "Price Overview", description: "Intraday → 5Y price with range selector.", source: "market", w: 5, h: 6, minW: 4, minH: 5, tabs: ["overview"] },
   "stock-performance": { type: "stock-performance", title: "Stock Performance", description: "1Y area chart of closing price.", source: "market", w: 4, h: 6, minW: 3, minH: 5, tabs: ["overview", "financials"] },
   "key-metrics": { type: "key-metrics", title: "Key Metrics", description: "Market cap, P/E, revenue, ROE tiles.", source: "market", w: 3, h: 6, minW: 3, minH: 4, tabs: ["overview", "financials"] },
   valuation: { type: "valuation", title: "Valuation", description: "P/E, P/B, EV/EBITDA, price vs target.", source: "market", w: 4, h: 6, minW: 3, minH: 5, tabs: ["overview", "valuation"] },
@@ -16,7 +16,7 @@ export const WIDGET_META: Record<WidgetType, WidgetMeta> = {
   "financial-health": { type: "financial-health", title: "Financial Health", description: "Margins, liquidity, leverage gauges.", source: "market", w: 4, h: 6, minW: 3, minH: 5, tabs: ["overview", "financials"] },
   "business-health": { type: "business-health", title: "Business Health", description: "Radar of profitability, growth, efficiency, margins from real metrics.", source: "market", w: 4, h: 6, minW: 3, minH: 5, tabs: ["overview", "financials"] },
   "key-financials": { type: "key-financials", title: "Key Financials", description: "Multi-year income statement table.", source: "market", w: 5, h: 6, minW: 4, minH: 5, tabs: ["overview", "financials"] },
-  "analyst-consensus": { type: "analyst-consensus", title: "Analyst Consensus", description: "Buy/Hold/Sell trend + price target.", source: "market", w: 4, h: 6, minW: 3, minH: 5, tabs: ["overview", "valuation", "peers"] },
+  "analyst-consensus": { type: "analyst-consensus", title: "Analyst Consensus", description: "Buy/Hold/Sell trend + price target.", source: "market", w: 4, h: 6, minW: 3, minH: 5, tabs: ["overview", "valuation"] },
   "investment-thesis": { type: "investment-thesis", title: "Investment Thesis", description: "Bull case, bear case, catalysts.", source: "ai", w: 4, h: 6, minW: 3, minH: 5, tabs: ["overview"] },
   "bull-thesis": { type: "bull-thesis", title: "Bull Thesis", description: "The case to invest.", source: "ai", w: 3, h: 6, minW: 2, minH: 4, tabs: ["overview"] },
   "bear-thesis": { type: "bear-thesis", title: "Bear Thesis", description: "The case to avoid.", source: "ai", w: 3, h: 6, minW: 2, minH: 4, tabs: ["overview"] },
@@ -27,7 +27,7 @@ export const WIDGET_META: Record<WidgetType, WidgetMeta> = {
   "insider-activity": { type: "insider-activity", title: "Insider Activity", description: "Recent insider transactions.", source: "market", w: 4, h: 6, minW: 3, minH: 5, tabs: ["overview", "peers"] },
   "recent-catalysts": { type: "recent-catalysts", title: "Recent Catalysts", description: "Upcoming events and earnings dates.", source: "ai", w: 4, h: 5, minW: 3, minH: 4, tabs: ["overview", "news"] },
   "news-sentiment": { type: "news-sentiment", title: "News Sentiment", description: "Market sentiment from recent news.", source: "ai", w: 4, h: 6, minW: 3, minH: 4, tabs: ["overview", "news"] },
-  comparables: { type: "comparables", title: "Comparable Companies", description: "Peer companies and valuation.", source: "market", w: 5, h: 6, minW: 4, minH: 4, tabs: ["overview", "peers", "valuation"] },
+  comparables: { type: "comparables", title: "Comparable Companies", description: "Peer companies and valuation.", source: "market", w: 5, h: 6, minW: 4, minH: 4, tabs: ["overview", "peers"] },
   dividends: { type: "dividends", title: "Dividend History", description: "Historical dividend payments.", source: "market", w: 4, h: 5, minW: 3, minH: 4, tabs: ["overview", "financials"] },
   notes: { type: "notes", title: "Notes", description: "Your private notes on this company.", source: "local", w: 4, h: 5, minW: 3, minH: 3, tabs: ["overview", "notes"] },
   "ai-chat": { type: "ai-chat", title: "AI Chat", description: "Ask follow-up questions about this company.", source: "local", w: 4, h: 8, minW: 3, minH: 5, tabs: ["overview", "notes"] },
@@ -59,9 +59,13 @@ export function buildDefaultDashboard(): { widgets: WidgetInstance[] } {
     ["key-financials", 5, 6],
     ["recent-catalysts", 3, 6],
     ["news-sentiment", 4, 6],
+    ["valuation", 4, 6],
     ["analyst-consensus", 4, 6],
+    ["comparables", 5, 6],
     ["financial-health", 4, 6],
     ["stock-performance", 4, 6],
+    ["notes", 4, 6],
+    ["ai-chat", 4, 8],
   ];
 
   const widgets: WidgetInstance[] = spec.map(([type, w, h]) => ({

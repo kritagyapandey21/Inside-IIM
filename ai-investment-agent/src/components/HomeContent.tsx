@@ -7,6 +7,7 @@ import { useResearchStore } from "@/lib/useResearchStore";
 import Sidebar, { Section } from "@/components/dashboard/Sidebar";
 import CompanyHeader, { DashTab } from "@/components/dashboard/CompanyHeader";
 import DashboardGrid from "@/components/dashboard/DashboardGrid";
+import WatchlistView from "@/components/dashboard/WatchlistView";
 import CommandPalette from "@/components/CommandPalette";
 import { WIDGET_META, ALL_WIDGET_TYPES } from "@/lib/dashboard/widgetMeta";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -121,7 +122,22 @@ function DashboardShell() {
 
   // Main content rendering based on sidebar section
   const renderContent = () => {
-    // Non-dashboard sections show placeholder views
+    if (section === "watchlist") {
+      return (
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <WatchlistView
+            watchlist={researchStore.watchlist}
+            onOpen={(company) => {
+              setSection("dashboard");
+              analyze(company);
+            }}
+            onUnpin={(company) => researchStore.togglePin(company)}
+          />
+        </div>
+      );
+    }
+
+    // Other non-dashboard sections show placeholder views
     if (section !== "dashboard") {
       const view = SECTION_VIEWS[section];
       return (

@@ -8,6 +8,8 @@ import {
   Bar,
   BarChart,
   Cell,
+  ComposedChart,
+  Line,
   PolarAngleAxis,
   PolarGrid,
   Radar,
@@ -24,6 +26,10 @@ import {
   Percent,
   TrendingUp,
   Building2,
+  AreaChart as AreaChartIcon,
+  LineChart as LineChartIcon,
+  BarChart3,
+  CandlestickChart,
 } from "lucide-react";
 import { useDashboardData } from "@/lib/dashboard/DashboardContext";
 import { WidgetLoading, WidgetError, WidgetEmpty } from "./WidgetStates";
@@ -57,8 +63,15 @@ function ChartTooltip({ active, payload, formatter }: any) {
 /* ---------------------------------------------------------------- Price */
 
 const PRICE_RANGES = ["1M", "3M", "6M", "1Y"] as const;
+const CHART_TYPES = [
+  { id: "area", label: "Area", icon: AreaChartIcon },
+  { id: "line", label: "Line", icon: LineChartIcon },
+  { id: "candle", label: "Candles", icon: CandlestickChart },
+  { id: "bar", label: "OHLC", icon: BarChart3 },
+] as const;
+type ChartTypeId = (typeof CHART_TYPES)[number]["id"];
 
-function sliceByRange(points: { date: string; close: number }[], range: string) {
+function sliceByRange<T extends { date: string }>(points: T[], range: string): T[] {
   if (points.length === 0) return points;
   const last = new Date(points[points.length - 1].date).getTime();
   const days = range === "1M" ? 31 : range === "3M" ? 93 : range === "6M" ? 186 : 372;
@@ -67,8 +80,38 @@ function sliceByRange(points: { date: string; close: number }[], range: string) 
   return sliced.length > 1 ? sliced : points;
 }
 
+/**
+ * Custom Recharts shape: a classic OHLC candlestick (wick + body).
+ *
+ * Driven by a floating bar with dataKey={["low", "high"]} — Recharts then
+ * gives this shape pixel-accurate `y` (top, i.e. high) and `height` (high→low
+ * span) for free, since that's exactly what a range bar's y/height represent.
+ * Open/close only need to be re-projected onto that same pixel span.
+ */
+function Candle(props: any) {
+  const { x, y, width, height, payload } = props;
+  const { open, close, high, low } = payload;
+  if ([open, close, high, low].some((v) => typeof v !== "number")) return null;
+  const up = close >= open;
+  const color = up ? CHART.positive : CHART.negative;
+  const span = Math.max(high - low, 1e-9);
+  const pxPerUnit = height / span;
+  const yOpen = y + (high - open) * pxPerUnit;
+  const yClose = y + (high - close) * pxPerUnit;
+  const bodyTop = Math.min(yOpen, yClose);
+  const bodyHeight = Math.max(Math.abs(yClose - yOpen), 1);
+  const cx = x + width / 2;
+  return (
+    <g>
+      <line x1={cx} x2={cx} y1={y} y2={y + height} stroke={color} strokeWidth={1} />
+      <rect x={x} y={bodyTop} width={width} height={bodyHeight} fill={color} />
+    </g>
+  );
+}
+
 export function PriceChart() {
   const [range, setRange] = useState<string>("1Y");
+  const [chartType, setChartType] = useState<ChartTypeId>("area");
   return (
     <MarketGate>
       {(m) => {
@@ -76,13 +119,27 @@ export function PriceChart() {
         if (!hist || hist.points.length === 0)
           return <WidgetEmpty label="No price history" />;
         const data = sliceByRange(
-          hist.points.map((p) => ({ date: p.date, close: p.close })),
+          hist.points.map((p) => ({
+            date: p.date,
+            close: p.close,
+            open: p.open,
+            high: p.high,
+            low: p.low,
+            // Recharts floating-bar form: a [min, max] tuple dataKey gives the
+            // Candle shape pixel-accurate y/height for the high-low span.
+            range: [p.low, p.high] as [number, number],
+          })),
           range
         );
         const price = m.metrics.regularMarketPrice;
         const chg = m.metrics.regularMarketChangePercent;
         const up = (chg ?? 0) >= 0;
         const currency = hist.currency ?? m.metrics.currency;
+        const ohlcTooltip = (p: any) =>
+          `${new Date(p.payload.date).toLocaleDateString()} · O ${fmtMoney(p.payload.open, currency)} H ${fmtMoney(
+            p.payload.high,
+            currency
+          )} L ${fmtMoney(p.payload.low, currency)} C ${fmtMoney(p.payload.close, currency)}`;
         return (
           <div className="flex h-full flex-col">
             <div className="mb-2 flex items-end justify-between">
@@ -90,36 +147,99 @@ export function PriceChart() {
                 <span className="mono text-2xl font-bold">{fmtMoney(price, currency)}</span>{" "}
                 <Delta value={chg} className="text-sm" />
               </div>
+              <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
+                {CHART_TYPES.map((ct) => {
+                  const Icon = ct.icon;
+                  return (
+                    <button
+                      key={ct.id}
+                      onClick={() => setChartType(ct.id)}
+                      title={ct.label}
+                      aria-label={ct.label}
+                      className={cn(
+                        "flex h-6 w-6 items-center justify-center rounded-[5px] transition-colors",
+                        chartType === ct.id
+                          ? "bg-hover text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="min-h-0 flex-1">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="priceFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={up ? CHART.positive : CHART.negative} stopOpacity={0.25} />
-                      <stop offset="100%" stopColor={up ? CHART.positive : CHART.negative} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="date" hide />
-                  <YAxis domain={["auto", "auto"]} hide />
-                  <Tooltip
-                    content={
-                      <ChartTooltip
-                        formatter={(p: any) =>
-                          `${new Date(p.payload.date).toLocaleDateString()} · ${fmtMoney(p.value, currency)}`
-                        }
-                      />
-                    }
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="close"
-                    stroke={up ? CHART.positive : CHART.negative}
-                    strokeWidth={1.6}
-                    fill="url(#priceFill)"
-                    isAnimationActive={false}
-                  />
-                </AreaChart>
+                {chartType === "area" ? (
+                  <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="priceFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={up ? CHART.positive : CHART.negative} stopOpacity={0.25} />
+                        <stop offset="100%" stopColor={up ? CHART.positive : CHART.negative} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="date" hide />
+                    <YAxis domain={["auto", "auto"]} hide />
+                    <Tooltip
+                      content={
+                        <ChartTooltip
+                          formatter={(p: any) =>
+                            `${new Date(p.payload.date).toLocaleDateString()} · ${fmtMoney(p.value, currency)}`
+                          }
+                        />
+                      }
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="close"
+                      stroke={up ? CHART.positive : CHART.negative}
+                      strokeWidth={1.6}
+                      fill="url(#priceFill)"
+                      isAnimationActive={false}
+                    />
+                  </AreaChart>
+                ) : chartType === "line" ? (
+                  <ComposedChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                    <XAxis dataKey="date" hide />
+                    <YAxis domain={["auto", "auto"]} hide />
+                    <Tooltip
+                      content={
+                        <ChartTooltip
+                          formatter={(p: any) =>
+                            `${new Date(p.payload.date).toLocaleDateString()} · ${fmtMoney(p.value, currency)}`
+                          }
+                        />
+                      }
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="close"
+                      stroke={up ? CHART.positive : CHART.negative}
+                      strokeWidth={1.6}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  </ComposedChart>
+                ) : chartType === "candle" ? (
+                  <ComposedChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                    <XAxis dataKey="date" hide />
+                    <YAxis domain={["auto", "auto"]} hide />
+                    <Tooltip content={<ChartTooltip formatter={ohlcTooltip} />} />
+                    <Bar dataKey="range" shape={<Candle />} isAnimationActive={false} />
+                  </ComposedChart>
+                ) : (
+                  <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                    <XAxis dataKey="date" hide />
+                    <YAxis domain={["auto", "auto"]} hide />
+                    <Tooltip content={<ChartTooltip formatter={ohlcTooltip} />} />
+                    <Bar dataKey="close" isAnimationActive={false}>
+                      {data.map((d, i) => (
+                        <Cell key={i} fill={d.close >= d.open ? CHART.positive : CHART.negative} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                )}
               </ResponsiveContainer>
             </div>
             <div className="mt-2 flex gap-1">

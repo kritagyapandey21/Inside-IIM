@@ -59,8 +59,17 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
   const stepTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Bumped on every analyze()/loadResearch() call. In-flight fetches capture
+  // the token they were issued with and discard their result if a newer
+  // request has started by the time they resolve — otherwise an old, slow
+  // response (e.g. a retried AI call) can land after a newer search and
+  // silently overwrite it, making the new search look like it "didn't work".
+  const marketToken = useRef(0);
+  const researchToken = useRef(0);
+
   const fetchMarket = useCallback(
     async (query: string, range = "1Y") => {
+      const token = ++marketToken.current;
       setMarketLoading(true);
       setMarketError(null);
       try {
@@ -68,6 +77,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           `/api/market?q=${encodeURIComponent(query)}&range=${range}`
         );
         const json = await res.json();
+        if (token !== marketToken.current) return null; // superseded — drop it
         if (!res.ok) throw new Error(json.error || "Market data failed");
         setTicker(json.ticker);
         setMarket(json.data as MarketData);
@@ -76,10 +86,11 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         }
         return json.ticker as string;
       } catch (e) {
+        if (token !== marketToken.current) return null;
         setMarketError(e instanceof Error ? e.message : "Market data failed");
         return null;
       } finally {
-        setMarketLoading(false);
+        if (token === marketToken.current) setMarketLoading(false);
       }
     },
     []
@@ -94,12 +105,14 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   );
 
   const fetchResearch = useCallback(async (query: string) => {
+    const token = ++researchToken.current;
     setResearchLoading(true);
     setResearchError(null);
     setResearch(null);
     setResearchStep(0);
     if (stepTimer.current) clearInterval(stepTimer.current);
     stepTimer.current = setInterval(() => {
+      if (token !== researchToken.current) return;
       setResearchStep((s) => (s < RESEARCH_STEPS - 1 ? s + 1 : s));
     }, 12000);
     try {
@@ -109,13 +122,15 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         body: JSON.stringify({ companyName: query }),
       });
       const json = await res.json();
+      if (token !== researchToken.current) return; // a newer analyze() has since started
       if (!res.ok) throw new Error(json.error || "Research failed");
       setResearch(json.data as ResearchResult);
     } catch (e) {
+      if (token !== researchToken.current) return;
       setResearchError(e instanceof Error ? e.message : "Research failed");
     } finally {
       if (stepTimer.current) clearInterval(stepTimer.current);
-      setResearchLoading(false);
+      if (token === researchToken.current) setResearchLoading(false);
     }
   }, []);
 
@@ -131,6 +146,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
   const loadResearch = useCallback(
     (result: ResearchResult) => {
+      // Invalidate any in-flight analyze() so its eventual response can't
+      // clobber this instantly-loaded result.
+      researchToken.current += 1;
       setResearch(result);
       setResearchError(null);
       setResearchLoading(false);

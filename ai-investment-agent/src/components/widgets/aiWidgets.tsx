@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { CheckCircle2, XCircle, Zap, Shield, Lightbulb, Calendar, AlertTriangle } from "lucide-react";
 import { useDashboardData } from "@/lib/dashboard/DashboardContext";
 import Markdown from "@/components/Markdown";
@@ -7,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   WidgetError,
   WidgetEmpty,
-  WidgetSpinner,
+  WidgetLoading,
 } from "./WidgetStates";
 import {
   ScoreRing,
@@ -17,6 +18,10 @@ import {
 } from "./parts";
 import { cn } from "@/lib/utils";
 import type { Recommendation } from "@/lib/types";
+
+/** After this long with no result, stop spinning silently and offer a retry
+ *  instead — an indefinite spinner is indistinguishable from "broken". */
+const SLOW_THRESHOLD_MS = 30000;
 
 /**
  * The research API falls back to this exact empty shape when the LLM's
@@ -38,22 +43,35 @@ function useAi() {
   return { research, researchLoading, researchError, researchStep };
 }
 
-const STEP_LABELS = [
-  "Gathering company data…",
-  "Fetching financials…",
-  "Analyzing news…",
-  "Synthesizing thesis…",
-  "Generating verdict…",
-];
-
 function AiGate({
   children,
 }: {
   children: () => React.ReactNode;
 }) {
-  const { research, researchLoading, researchError, researchStep } = useAi();
-  if (researchLoading) return <WidgetSpinner label={STEP_LABELS[researchStep]} />;
-  if (researchError) return <WidgetError message={researchError} />;
+  const { research, researchLoading, researchError } = useAi();
+  const { companyName, analyze } = useDashboardData();
+  const retry = companyName ? () => analyze(companyName) : undefined;
+
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!researchLoading) return;
+    const t = setTimeout(() => setSlow(true), SLOW_THRESHOLD_MS);
+    return () => clearTimeout(t);
+  }, [researchLoading]);
+  // Reset eagerly (during render) once loading ends, rather than in a
+  // separate effect — avoids the cascading-render setState-in-effect smell.
+  if (!researchLoading && slow) setSlow(false);
+
+  if (researchLoading && slow) {
+    return (
+      <WidgetError
+        message="This is taking longer than usual — the AI service may be busy."
+        onRetry={retry}
+      />
+    );
+  }
+  if (researchLoading) return <WidgetLoading rows={4} />;
+  if (researchError) return <WidgetError message={researchError} onRetry={retry} />;
   if (!research) return <WidgetEmpty label="Run an analysis to populate" />;
   return <>{children()}</>;
 }

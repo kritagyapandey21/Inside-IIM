@@ -1,8 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, CornerDownLeft, Clock, Star } from "lucide-react";
+import { Search, CornerDownLeft, Clock, Star, TrendingUp } from "lucide-react";
 import type { SavedResult } from "@/lib/types";
+
+interface TickerSuggestion {
+  symbol: string;
+  name: string;
+  exchange?: string;
+}
 
 interface CommandPaletteProps {
   open: boolean;
@@ -29,6 +35,7 @@ export default function CommandPalette({
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [tickerSuggestions, setTickerSuggestions] = useState<TickerSuggestion[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Reset transient input state each time the palette opens.
@@ -37,12 +44,40 @@ export default function CommandPalette({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery("");
       setActiveIndex(0);
+      setTickerSuggestions([]);
       // Focus after the modal paints.
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
 
   const q = query.trim().toLowerCase();
+
+  // Live ticker/company autocomplete as the user types — debounced, so a
+  // typo like "relience" still surfaces "Reliance Industries" before they
+  // hit Enter, instead of failing only after a full research run.
+  useEffect(() => {
+    if (q.length < 1) return;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+        const json = await res.json();
+        setTickerSuggestions(Array.isArray(json.results) ? json.results : []);
+      } catch {
+        setTickerSuggestions([]);
+      }
+    }, 200);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  // Watchlist entries with no saved research yet — still worth surfacing as
+  // a quick-jump row, since pinning shouldn't require having run an analysis.
+  const watchlistOnly = useMemo(
+    () =>
+      watchlist.filter(
+        (c) => !history.some((h) => h.result.companyName.toLowerCase() === c.toLowerCase())
+      ),
+    [watchlist, history]
+  );
 
   const matches = useMemo(() => {
     if (!q) return history.slice(0, 8);
@@ -51,23 +86,58 @@ export default function CommandPalette({
       .slice(0, 8);
   }, [history, q]);
 
-  // Rows: matched history entries, then a "run new" row when text is typed
-  // and isn't an exact existing match.
-  const hasExact = history.some(
-    (h) => h.result.companyName.toLowerCase() === q
-  );
+  const watchlistMatches = useMemo(() => {
+    if (!q) return watchlistOnly.slice(0, 4);
+    return watchlistOnly.filter((c) => c.toLowerCase().includes(q)).slice(0, 4);
+  }, [watchlistOnly, q]);
+
+  // Live autocomplete results, deduped against rows already shown above —
+  // no point suggesting "NVIDIA Corp" again if it's already in history.
+  const tickerMatches = useMemo(() => {
+    if (!q) return [];
+    const shown = new Set([
+      ...matches.map((h) => h.result.companyName.toLowerCase()),
+      ...watchlistMatches.map((c) => c.toLowerCase()),
+    ]);
+    return tickerSuggestions.filter(
+      (t) => !shown.has(t.name.toLowerCase()) && !shown.has(t.symbol.toLowerCase())
+    ).slice(0, 5);
+  }, [tickerSuggestions, matches, watchlistMatches, q]);
+
+  // Rows: matched history entries, then pinned-but-unresearched companies,
+  // then live ticker suggestions, then a "run new" row — only when the typed
+  // text doesn't already exact-match something above (incl. a suggestion).
+  const hasExact =
+    history.some((h) => h.result.companyName.toLowerCase() === q) ||
+    watchlistMatches.some((c) => c.toLowerCase() === q) ||
+    tickerMatches.some((t) => t.symbol.toLowerCase() === q || t.name.toLowerCase() === q);
   const showRun = q.length > 0 && !hasExact;
-  const rowCount = matches.length + (showRun ? 1 : 0);
+  const rowCount =
+    matches.length + watchlistMatches.length + tickerMatches.length + (showRun ? 1 : 0);
 
   if (!open) return null;
 
   const choose = (index: number) => {
-    if (showRun && index === matches.length) {
-      onRun(query.trim());
-    } else {
-      const saved = matches[index];
+    let i = index;
+    if (i < matches.length) {
+      const saved = matches[i];
       if (saved) onOpen(saved);
+      onClose();
+      return;
     }
+    i -= matches.length;
+    if (i < watchlistMatches.length) {
+      onRun(watchlistMatches[i]);
+      onClose();
+      return;
+    }
+    i -= watchlistMatches.length;
+    if (i < tickerMatches.length) {
+      onRun(tickerMatches[i].name);
+      onClose();
+      return;
+    }
+    if (showRun) onRun(query.trim());
     onClose();
   };
 
@@ -141,13 +211,51 @@ export default function CommandPalette({
             </button>
           ))}
 
+          {watchlistMatches.map((company, i) => {
+            const index = matches.length + i;
+            return (
+              <button
+                key={company}
+                className={`palette-row ${activeIndex === index ? "active" : ""}`}
+                onMouseEnter={() => setActiveIndex(index)}
+                onClick={() => choose(index)}
+              >
+                <Star size={14} className="palette-row-icon pinned" />
+                <span className="palette-row-name">{company}</span>
+                <span className="palette-row-hint">analyze</span>
+              </button>
+            );
+          })}
+
+          {tickerMatches.map((t, i) => {
+            const index = matches.length + watchlistMatches.length + i;
+            return (
+              <button
+                key={t.symbol}
+                className={`palette-row ${activeIndex === index ? "active" : ""}`}
+                onMouseEnter={() => setActiveIndex(index)}
+                onClick={() => choose(index)}
+              >
+                <TrendingUp size={14} className="palette-row-icon" />
+                <span className="palette-row-name">{t.name}</span>
+                <span className="palette-row-hint mono">{t.symbol}</span>
+              </button>
+            );
+          })}
+
           {showRun && (
             <button
               className={`palette-row run ${
-                activeIndex === matches.length ? "active" : ""
+                activeIndex === matches.length + watchlistMatches.length + tickerMatches.length
+                  ? "active"
+                  : ""
               }`}
-              onMouseEnter={() => setActiveIndex(matches.length)}
-              onClick={() => choose(matches.length)}
+              onMouseEnter={() =>
+                setActiveIndex(matches.length + watchlistMatches.length + tickerMatches.length)
+              }
+              onClick={() =>
+                choose(matches.length + watchlistMatches.length + tickerMatches.length)
+              }
             >
               <CornerDownLeft size={14} className="palette-row-icon" />
               <span className="palette-row-name">

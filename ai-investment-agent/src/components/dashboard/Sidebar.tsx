@@ -11,7 +11,6 @@ import {
   Settings,
   HelpCircle,
   Terminal,
-  ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
   X,
@@ -105,21 +104,23 @@ export default function Sidebar({
       <aside
         className={cn(
           "no-print flex shrink-0 flex-col border-r border-border bg-background-secondary transition-[width] duration-200 ease-out",
-          collapsed ? "w-[64px]" : "w-[228px]",
           !hydrated && "duration-0",
-          // Mobile: fixed-position overlay drawer, slid off-canvas until opened.
+          // Mobile: fixed-position overlay drawer, slid off-canvas until opened,
+          // always full drawer width regardless of the desktop collapsed state.
           "fixed inset-y-0 left-0 z-50 w-[260px] transition-transform duration-200 ease-out lg:static lg:z-auto lg:translate-x-0",
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+          // Desktop: width reflects collapsed state.
+          collapsed ? "lg:w-[64px]" : "lg:w-[228px]"
         )}
       >
         {/* Logo + collapse toggle (desktop) / close (mobile) */}
         <div
           className={cn(
-            "flex h-14 items-center border-b border-border/60",
-            collapsed ? "flex-col justify-center gap-2 px-0 py-2" : "justify-between px-4"
+            "flex items-center border-b border-border/60",
+            collapsed ? "h-auto flex-col items-start gap-2 px-2.5 py-2.5" : "h-14 justify-between px-4"
           )}
         >
-          <div className={cn("flex min-w-0 items-center gap-2.5", collapsed && "justify-center")}>
+          <div className="flex min-w-0 items-center gap-2.5">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-foreground text-background">
               <Terminal className="h-4 w-4" />
             </div>
@@ -165,7 +166,7 @@ export default function Sidebar({
               }}
               className={cn(
                 "group relative flex items-center gap-3 rounded-md py-2 text-sm font-medium transition-colors",
-                collapsed ? "justify-center px-0" : "px-3",
+                collapsed ? "justify-start px-2.5" : "px-3",
                 active
                   ? "bg-hover text-foreground"
                   : "text-muted-foreground hover:bg-hover/60 hover:text-foreground"
@@ -192,36 +193,16 @@ export default function Sidebar({
         })}
       </nav>
 
-      {/* User + help */}
+      {/* Help */}
       <div className={cn("border-t border-border py-2.5", collapsed ? "px-2.5" : "px-3")}>
         {collapsed ? (
-          <SimpleTooltip label="Analyst — Pro Plan" side="right">
-            <button className="flex w-full items-center justify-center rounded-md py-2 transition-colors hover:bg-hover">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-hover text-xs font-semibold">
-                A
-              </div>
-            </button>
-          </SimpleTooltip>
-        ) : (
-          <button className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-hover">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-hover text-xs font-semibold">
-              A
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium">Analyst</div>
-              <div className="truncate text-xs text-muted-foreground">Pro Plan</div>
-            </div>
-            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-          </button>
-        )}
-        {collapsed ? (
           <SimpleTooltip label="Help" side="right">
-            <button className="mt-1 flex w-full items-center justify-center rounded-md py-2 text-muted-foreground transition-colors hover:bg-hover hover:text-foreground">
+            <button className="flex w-full items-center justify-start rounded-md py-2 text-muted-foreground transition-colors hover:bg-hover hover:text-foreground">
               <HelpCircle className="h-[18px] w-[18px] shrink-0" />
             </button>
           </SimpleTooltip>
         ) : (
-          <button className="mt-1 flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground">
+          <button className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground">
             <HelpCircle className="h-[18px] w-[18px] shrink-0" />
             Help
           </button>
