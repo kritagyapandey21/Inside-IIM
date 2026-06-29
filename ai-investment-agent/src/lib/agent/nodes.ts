@@ -1,4 +1,4 @@
-import { ChatOpenAI } from "@langchain/openai";
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import {
   HumanMessage,
   SystemMessage,
@@ -9,21 +9,14 @@ import { createSearchTool, fetchFinancialData } from "./tools";
 import { resolveTicker } from "./marketData";
 
 /**
- * Creates the LLM instance configured for NVIDIA NIM API.
- * NVIDIA provides an OpenAI-compatible endpoint.
+ * Creates the LLM instance configured for the Gemini API.
  */
 export function createLLM() {
-  return new ChatOpenAI({
-    modelName: process.env.NVIDIA_MODEL || "meta/llama-3.1-70b-instruct",
-    apiKey: process.env.NVIDIA_API_KEY || "",
-    configuration: {
-      baseURL: process.env.NVIDIA_BASE_URL || "https://integrate.api.nvidia.com/v1",
-    },
+  return new ChatGoogleGenerativeAI({
+    model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+    apiKey: process.env.GEMINI_API_KEY || "",
     temperature: 0.3,
-    maxTokens: 4096,
-    // Hard per-request ceiling so a slow/hung NVIDIA connection can never block
-    // a node indefinitely — it surfaces as a timeout we then retry.
-    timeout: 90_000,
+    maxOutputTokens: 4096,
     maxRetries: 0, // we manage retries/backoff ourselves in invokeWithRetry
   });
 }
@@ -31,7 +24,7 @@ export function createLLM() {
 /**
  * Invoke the LLM with exponential backoff + jitter on transient failures.
  *
- * NVIDIA NIM frequently returns capacity-based `429`s when many calls fire in
+ * Rate-limited / capacity `429`s can still happen when many calls fire in
  * quick succession (this agent makes ~8 LLM calls per analysis, three of them
  * concurrently). Without retries a single 429 collapses a node into an
  * "Unable to…" string, which is what left the verdict / catalysts / sentiment
@@ -47,7 +40,9 @@ async function invokeWithRetry(
     try {
       // A fresh client per attempt avoids any stuck connection state.
       const llm = createLLM();
-      const res = await llm.invoke(messages);
+      // Hard per-request ceiling so a slow/hung connection can never block a
+      // node indefinitely — it surfaces as a timeout we then retry.
+      const res = await llm.invoke(messages, { timeout: 90_000 });
       return typeof res.content === "string"
         ? res.content
         : JSON.stringify(res.content);

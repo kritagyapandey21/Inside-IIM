@@ -44,7 +44,7 @@ gatherInfo   gatherFinancials   gatherNews      (run in parallel)
 
 The first three nodes run concurrently (LangGraph fan-out/fan-in), so the wall-clock cost is roughly `max(gatherInfo, gatherFinancials, gatherNews) + analyze + recommend` instead of the sum of all five.
 
-**Reliability**: the agent fires around eight LLM calls per analysis against NVIDIA NIM, which rate-limits aggressively under that load. Every LLM call goes through a retry wrapper with exponential backoff and jitter on `429`/`500`/`503`/`504` responses, so a transient rate limit slows a request down rather than producing a broken "Unable to..." result.
+**Reliability**: the agent fires around eight LLM calls per analysis against the Gemini API (`gemini-2.5-flash` by default), which can still return capacity-based `429`s under load. Every LLM call goes through a retry wrapper with exponential backoff and jitter on `429`/`500`/`503`/`504` responses, so a transient rate limit slows a request down rather than producing a broken "Unable to..." result.
 
 **Caching**: completed results are cached in memory per company name (case-insensitive) for 15 minutes, and concurrent requests for the same company share a single in-flight promise instead of each re-running the full agent. This matters because a full analysis is expensive and the UI can legitimately request the same company more than once (deep links, reopening history, double-clicks).
 

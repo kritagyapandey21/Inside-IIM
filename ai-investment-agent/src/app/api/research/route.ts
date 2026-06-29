@@ -37,9 +37,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate environment variables
-    if (!process.env.NVIDIA_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
-        { error: "NVIDIA API key is not configured. Please set NVIDIA_API_KEY in your .env.local file." },
+        { error: "Gemini API key is not configured. Please set GEMINI_API_KEY in your .env.local file." },
         { status: 500 }
       );
     }
