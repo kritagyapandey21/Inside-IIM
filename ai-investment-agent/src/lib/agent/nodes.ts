@@ -1,4 +1,5 @@
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { ChatOpenAI } from "@langchain/openai";
 import {
   HumanMessage,
   SystemMessage,
@@ -8,10 +9,8 @@ import { ResearchStateType } from "./state";
 import { createSearchTool, fetchFinancialData } from "./tools";
 import { resolveTicker } from "./marketData";
 
-/**
- * Creates the LLM instance configured for the Gemini API.
- */
-export function createLLM() {
+/** Primary LLM: Gemini. */
+function createGeminiLLM() {
   return new ChatGoogleGenerativeAI({
     model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
     apiKey: process.env.GEMINI_API_KEY || "",
@@ -21,8 +20,30 @@ export function createLLM() {
   });
 }
 
+/** Fallback LLM: NVIDIA NIM (OpenAI-compatible endpoint), used only if Gemini fails. */
+function createNvidiaLLM() {
+  return new ChatOpenAI({
+    modelName: process.env.NVIDIA_MODEL || "meta/llama-3.1-70b-instruct",
+    apiKey: process.env.NVIDIA_API_KEY || "",
+    configuration: {
+      baseURL: process.env.NVIDIA_BASE_URL || "https://integrate.api.nvidia.com/v1",
+    },
+    temperature: 0.3,
+    maxTokens: 4096,
+    timeout: 90_000,
+    maxRetries: 0,
+  });
+}
+
+const PROVIDERS = [
+  { name: "gemini", create: createGeminiLLM },
+  { name: "nvidia", create: createNvidiaLLM },
+] as const;
+
 /**
- * Invoke the LLM with exponential backoff + jitter on transient failures.
+ * Invoke the LLM with exponential backoff + jitter on transient failures,
+ * falling back from Gemini to NVIDIA NIM if Gemini is unavailable
+ * (misconfigured key, outage, or its retry budget is exhausted).
  *
  * Rate-limited / capacity `429`s can still happen when many calls fire in
  * quick succession (this agent makes ~8 LLM calls per analysis, three of them
@@ -31,36 +52,45 @@ export function createLLM() {
  * widgets stuck on "Generating verdict…" forever. Retrying with backoff turns
  * those transient failures into a slightly slower — but correct — result.
  */
-async function invokeWithRetry(
+export async function invokeWithRetry(
   messages: BaseMessage[],
   { retries = 5, baseDelayMs = 1500, label = "llm" } = {}
 ): Promise<string> {
   let lastErr: unknown;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      // A fresh client per attempt avoids any stuck connection state.
-      const llm = createLLM();
-      // Hard per-request ceiling so a slow/hung connection can never block a
-      // node indefinitely — it surfaces as a timeout we then retry.
-      const res = await llm.invoke(messages, { timeout: 90_000 });
-      return typeof res.content === "string"
-        ? res.content
-        : JSON.stringify(res.content);
-    } catch (err) {
-      lastErr = err;
-      const status = extractStatus(err);
-      const retriable = status === 429 || status === 500 || status === 503 || status === 504;
-      if (!retriable || attempt === retries) break;
-      // Honor Retry-After when present, else exponential backoff with jitter.
-      const retryAfter = extractRetryAfterMs(err);
-      const backoff = baseDelayMs * 2 ** attempt;
-      const jitter = Math.random() * 400;
-      const wait = retryAfter ?? backoff + jitter;
-      console.log(
-        `[Agent] ${label}: ${status ?? "error"} — retry ${attempt + 1}/${retries} in ${Math.round(wait)}ms`
-      );
-      await sleep(wait);
+  for (const provider of PROVIDERS) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        // A fresh client per attempt avoids any stuck connection state.
+        const llm = provider.create();
+        // Hard per-request ceiling so a slow/hung connection can never block a
+        // node indefinitely — it surfaces as a timeout we then retry.
+        const res = await llm.invoke(messages, { timeout: 90_000 });
+        return typeof res.content === "string"
+          ? res.content
+          : JSON.stringify(res.content);
+      } catch (err) {
+        lastErr = err;
+        const status = extractStatus(err);
+        // A misconfigured/invalid key can surface as a 429 from Google's gateway
+        // (rate-limited before the auth check) as easily as a 400 — retrying
+        // either just burns the full backoff budget before falling back, so
+        // detect the underlying auth failure directly and skip straight ahead.
+        const retriable =
+          !isAuthError(err) &&
+          (status === 429 || status === 500 || status === 503 || status === 504);
+        if (!retriable || attempt === retries) break; // give up on this provider, try the next
+        // Honor Retry-After when present, else exponential backoff with jitter.
+        const retryAfter = extractRetryAfterMs(err);
+        const backoff = baseDelayMs * 2 ** attempt;
+        const jitter = Math.random() * 400;
+        const wait = retryAfter ?? backoff + jitter;
+        console.log(
+          `[Agent] ${label} (${provider.name}): ${status ?? "error"} — retry ${attempt + 1}/${retries} in ${Math.round(wait)}ms`
+        );
+        await sleep(wait);
+      }
     }
+    console.log(`[Agent] ${label}: ${provider.name} unavailable, falling back`);
   }
   throw lastErr;
 }
@@ -78,6 +108,14 @@ function extractStatus(err: any): number | undefined {
     (typeof err?.message === "string" && /\b(429|500|503|504)\b/.test(err.message)
       ? Number(err.message.match(/\b(429|500|503|504)\b/)![1])
       : undefined)
+  );
+}
+
+function isAuthError(err: any): boolean {
+  if (err?.status === 401 || err?.status === 403) return true;
+  const msg = typeof err?.message === "string" ? err.message : "";
+  return /api[_ ]key[_ ]invalid|api key not valid|invalid api key|unauthorized|permission denied/i.test(
+    msg
   );
 }
 
